@@ -38,6 +38,8 @@ Powered by some great Go technology:
 - `GET /api/charts/<name>/<version>` - describe a chart version
 - `HEAD /api/charts/<name>` - check if chart exists (any versions)
 - `HEAD /api/charts/<name>/<version>` - check if chart version exists
+- `GET /api/repos` - list chart repos (only works with multitenancy enabled).
+- `GET /api/<fragment>/repos` - list sub-repos within a repository (only works with multitenancy enabled).
 
 ### Server Info
 - `GET /` - HTML welcome page

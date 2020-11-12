@@ -20,6 +20,8 @@ import (
 	"net/http/httptest"
 	pathutil "path"
 	"testing"
+	"strings"
+	"sort"
 
 	cm_auth "github.com/chartmuseum/auth"
 	"github.com/gin-gonic/gin"
@@ -30,12 +32,34 @@ type MatchTestSuite struct {
 	suite.Suite
 }
 
+type GinParamList struct {
+	params []gin.Param
+}
+
+func (l GinParamList) Len() int {
+	return len(l.params)
+}
+
+func (l GinParamList) Less(a int, b int) bool {
+	return strings.Compare(l.params[a].Key, l.params[b].Key) < 0
+}
+
+func (l GinParamList) Swap(a int, b int) {
+	l.params[a], l.params[b] = l.params[b], l.params[a]
+}
+
+func sortParams(params []gin.Param) []gin.Param {
+	l := GinParamList{params: params}
+	sort.Sort(l)
+	return l.params
+}
+
 func (suite *MatchTestSuite) TestMatch() {
 	c, _ := gin.CreateTestContext(httptest.NewRecorder())
 
 	handlers := []gin.HandlerFunc{}
 
-	for i := 0; i <= 9; i++ {
+	for i := 0; i <= 10; i++ {
 		{
 			j := i
 			handlers = append(handlers, func(c *gin.Context) {
@@ -55,22 +79,11 @@ func (suite *MatchTestSuite) TestMatch() {
 		{"POST", "/api/:repo/charts", handlers[7], cm_auth.PushAction},
 		{"POST", "/api/:repo/prov", handlers[8], cm_auth.PushAction},
 		{"DELETE", "/api/:repo/charts/:name/:version", handlers[9], cm_auth.PushAction},
+		{"GET", "/api/:repofragment/repos", handlers[10], cm_auth.PullAction},
 	}
 
-	for depth := 0; depth <= 3; depth++ {
-		var repo string
-
-		switch {
-		case depth == 1:
-			repo = "myrepo"
-		case depth == 2:
-			repo = "myorg/myrepo"
-		case depth == 3:
-			repo = "myorg/myteam/myrepo"
-		}
-
+	for depth, repo := range []string{"", "myrepo", "myorg/myrepo", "myorg/myteam/myrepo"} {
 		for _, contextPath := range []string{"", "/x", "/x/y", "/x/y/z"} {
-
 			// GET /
 			r := pathutil.Join("/", contextPath)
 			route, params := match(routes, "GET", r, contextPath, depth, false)
@@ -117,7 +130,7 @@ func (suite *MatchTestSuite) TestMatch() {
 			val, exists = c.Get("index")
 			suite.True(exists)
 			suite.Equal(2, val)
-			suite.Equal([]gin.Param{{"repo", repo}}, params)
+			suite.Equal(sortParams([]gin.Param{{"repo", repo}}), sortParams(params))
 
 			// GET /charts/mychart-0.1.0.tgz
 			r = pathutil.Join("/", contextPath, repo, "charts/mychart-0.1.0.tgz")
@@ -133,7 +146,7 @@ func (suite *MatchTestSuite) TestMatch() {
 			val, exists = c.Get("index")
 			suite.True(exists)
 			suite.Equal(3, val)
-			suite.Equal([]gin.Param{{"filename", "mychart-0.1.0.tgz"}, {"repo", repo}}, params)
+			suite.Equal(sortParams([]gin.Param{{"filename", "mychart-0.1.0.tgz"}, {"repo", repo}}), sortParams(params))
 
 			// GET /api/charts
 			r = pathutil.Join("/", contextPath, "api", repo, "charts")
@@ -149,7 +162,7 @@ func (suite *MatchTestSuite) TestMatch() {
 			val, exists = c.Get("index")
 			suite.True(exists)
 			suite.Equal(4, val)
-			suite.Equal([]gin.Param{{"repo", repo}}, params)
+			suite.Equal(sortParams([]gin.Param{{"repo", repo}}), sortParams(params))
 
 			// GET /api/charts/mychart
 			r = pathutil.Join("/", contextPath, "api", repo, "charts/mychart")
@@ -165,7 +178,7 @@ func (suite *MatchTestSuite) TestMatch() {
 			val, exists = c.Get("index")
 			suite.True(exists)
 			suite.Equal(5, val)
-			suite.Equal([]gin.Param{{"name", "mychart"}, {"repo", repo}}, params)
+			suite.Equal(sortParams([]gin.Param{{"name", "mychart"}, {"repo", repo}}), sortParams(params))
 
 			// GET /api/charts/mychart/0.1.0
 			r = pathutil.Join("/", contextPath, "api", repo, "charts/mychart/0.1.0")
@@ -181,7 +194,7 @@ func (suite *MatchTestSuite) TestMatch() {
 			val, exists = c.Get("index")
 			suite.True(exists)
 			suite.Equal(6, val)
-			suite.Equal([]gin.Param{{"name", "mychart"}, {"version", "0.1.0"}, {"repo", repo}}, params)
+			suite.Equal(sortParams([]gin.Param{{"name", "mychart"}, {"version", "0.1.0"}, {"repo", repo}}), sortParams(params))
 
 			// POST /api/charts
 			r = pathutil.Join("/", contextPath, "api", repo, "charts")
@@ -197,7 +210,7 @@ func (suite *MatchTestSuite) TestMatch() {
 			val, exists = c.Get("index")
 			suite.True(exists)
 			suite.Equal(7, val)
-			suite.Equal([]gin.Param{{"repo", repo}}, params)
+			suite.Equal(sortParams([]gin.Param{{"repo", repo}}), sortParams(params))
 
 			// POST /api/prov
 			r = pathutil.Join("/", contextPath, "api", repo, "prov")
@@ -213,7 +226,7 @@ func (suite *MatchTestSuite) TestMatch() {
 			val, exists = c.Get("index")
 			suite.True(exists)
 			suite.Equal(8, val)
-			suite.Equal([]gin.Param{{"repo", repo}}, params)
+			suite.Equal(sortParams([]gin.Param{{"repo", repo}}), sortParams(params))
 
 			// DELETE /api/charts/mychart/0.1.0
 			r = pathutil.Join("/", contextPath, "api", repo, "charts/mychart/0.1.0")
@@ -229,7 +242,30 @@ func (suite *MatchTestSuite) TestMatch() {
 			val, exists = c.Get("index")
 			suite.True(exists)
 			suite.Equal(9, val)
-			suite.Equal([]gin.Param{{"name", "mychart"}, {"version", "0.1.0"}, {"repo", repo}}, params)
+			suite.Equal(sortParams([]gin.Param{{"name", "mychart"}, {"version", "0.1.0"}, {"repo", repo}}), sortParams(params))
+
+			// GET /api/repos
+			for fragmentDepth, fragment := range []string{"", "myrepo", "myorg/myrepo", "myorg/myteam/myrepo"} {
+				r = pathutil.Join("/", contextPath, "api", fragment, "repos")
+				route, params = match(routes, "GET", r, contextPath, depth, false)
+				routeWithDepthDynamic, paramsWithDepthDynamic = match(routes, "GET", r, contextPath, 0, true)
+				suite.NotNil(routeWithDepthDynamic)
+
+				if fragmentDepth >= depth {
+					suite.Nil(route)
+				} else {
+					suite.Equal(route, routeWithDepthDynamic)
+					suite.Equal(params, paramsWithDepthDynamic)
+					suite.NotNil(route)
+					if route != nil {
+						route.Handler(c)
+					}
+					val, exists = c.Get("index")
+					suite.True(exists)
+					suite.Equal(10, val)
+					suite.Equal(sortParams([]gin.Param{{"repofragment", fragment}}), sortParams(params))
+				}
+			}
 		}
 	}
 
@@ -247,7 +283,7 @@ func (suite *MatchTestSuite) TestMatch() {
 	val, exists := c.Get("index")
 	suite.True(exists)
 	suite.Equal(2, val)
-	suite.Equal([]gin.Param{{"repo", "apix"}}, params)
+	suite.Equal(sortParams([]gin.Param{{"repo", "apix"}}), sortParams(params))
 
 	r = "/apix/charts/mychart-0.1.0.tgz"
 	route, params = match(routes, "GET", r, "", 1, false)
@@ -262,7 +298,7 @@ func (suite *MatchTestSuite) TestMatch() {
 	val, exists = c.Get("index")
 	suite.True(exists)
 	suite.Equal(3, val)
-	suite.Equal([]gin.Param{{"filename", "mychart-0.1.0.tgz"}, {"repo", "apix"}}, params)
+	suite.Equal(sortParams([]gin.Param{{"filename", "mychart-0.1.0.tgz"}, {"repo", "apix"}}), sortParams(params))
 
 	// Test route repos named just "api"
 	r = "/api/index.yaml"
@@ -278,7 +314,7 @@ func (suite *MatchTestSuite) TestMatch() {
 	val, exists = c.Get("index")
 	suite.True(exists)
 	suite.Equal(2, val)
-	suite.Equal([]gin.Param{{"repo", "api"}}, params)
+	suite.Equal(sortParams([]gin.Param{{"repo", "api"}}), sortParams(params))
 
 	r = "/api/charts/mychart-0.1.0.tgz"
 	route, params = match(routes, "GET", r, "", 1, false)
@@ -293,7 +329,7 @@ func (suite *MatchTestSuite) TestMatch() {
 	val, exists = c.Get("index")
 	suite.True(exists)
 	suite.Equal(3, val)
-	suite.Equal([]gin.Param{{"filename", "mychart-0.1.0.tgz"}, {"repo", "api"}}, params)
+	suite.Equal(sortParams([]gin.Param{{"filename", "mychart-0.1.0.tgz"}, {"repo", "api"}}), sortParams(params))
 
 	// just "api" as repo name, depth=2
 	r = "/api/xyz/index.yaml"
@@ -309,7 +345,7 @@ func (suite *MatchTestSuite) TestMatch() {
 	val, exists = c.Get("index")
 	suite.True(exists)
 	suite.Equal(2, val)
-	suite.Equal([]gin.Param{{"repo", "api/xyz"}}, params)
+	suite.Equal(sortParams([]gin.Param{{"repo", "api/xyz"}}), sortParams(params))
 
 	r = "/api/xyz/charts/mychart-0.1.0.tgz"
 	route, params = match(routes, "GET", r, "", 2, false)
@@ -324,7 +360,7 @@ func (suite *MatchTestSuite) TestMatch() {
 	val, exists = c.Get("index")
 	suite.True(exists)
 	suite.Equal(3, val)
-	suite.Equal([]gin.Param{{"filename", "mychart-0.1.0.tgz"}, {"repo", "api/xyz"}}, params)
+	suite.Equal(sortParams([]gin.Param{{"filename", "mychart-0.1.0.tgz"}, {"repo", "api/xyz"}}), sortParams(params))
 
 	// Test route repos named "health"
 	r = "/health/index.yaml"
@@ -340,7 +376,7 @@ func (suite *MatchTestSuite) TestMatch() {
 	val, exists = c.Get("index")
 	suite.True(exists)
 	suite.Equal(2, val)
-	suite.Equal([]gin.Param{{"repo", "health"}}, params)
+	suite.Equal(sortParams([]gin.Param{{"repo", "health"}}), sortParams(params))
 
 	r = "/health/charts/mychart-0.1.0.tgz"
 	route, params = match(routes, "GET", r, "", 1, false)
@@ -355,7 +391,7 @@ func (suite *MatchTestSuite) TestMatch() {
 	val, exists = c.Get("index")
 	suite.True(exists)
 	suite.Equal(3, val)
-	suite.Equal([]gin.Param{{"filename", "mychart-0.1.0.tgz"}, {"repo", "health"}}, params)
+	suite.Equal(sortParams([]gin.Param{{"filename", "mychart-0.1.0.tgz"}, {"repo", "health"}}), sortParams(params))
 }
 
 func TestMatchTestSuite(t *testing.T) {
