@@ -72,6 +72,9 @@ type (
 		CacheInterval  time.Duration
 		Host           string
 		Version        string
+		// PerChartLimit allow museum server to keep max N version Charts
+		// And avoid swelling too large(if so , the index genertion will become slow)
+		PerChartLimit int
 	}
 
 	// Server is a generic interface for web servers
@@ -140,6 +143,7 @@ func NewServer(options ServerOptions) (Server, error) {
 		EnforceSemver2:         options.EnforceSemver2,
 		Version:                options.Version,
 		CacheInterval:          options.CacheInterval,
+		PerChartLimit:          options.PerChartLimit,
 	})
 
 	return server, err
